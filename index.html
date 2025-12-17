@@ -1,137 +1,232 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Memory Card Game</title>
-  <style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Memory Card Game</title>
+<style>
     body {
-      font-family: Arial;
-      text-align: center;
-      background: #f2f2f2;
-      margin: 20px;
+        font-family: Arial, sans-serif;
+        text-align: center;
+        background: #ffffff; /* white background */
+        color: #333;
+        margin: 0;
+        padding: 20px;
     }
 
-    h1 {
-      margin-bottom: 10px;
+    h1 { margin-bottom: 10px; }
+
+    button, select {
+        padding: 8px 16px;
+        font-size: 16px;
+        margin: 5px 0;
+        border-radius: 5px;
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s;
     }
 
-    #winMessage {
-      font-size: 24px;
-      color: green;
-      margin-bottom: 15px;
-      font-weight: bold;
+    button {
+        background: #ff9800;
+        color: white;
+    }
+    button:hover {
+        background: #e68900;
+    }
+
+    select {
+        background: #ffd699;
+        color: #333;
     }
 
     .game-board {
-      width: 330px;
-      margin: auto;
-      display: grid;
-      grid-template-columns: repeat(4, 80px);
-      grid-gap: 10px;
+        margin: 20px auto;
+        display: grid;
+        gap: 10px;
+        justify-content: center;
     }
 
     .card {
-      width: 80px;
-      height: 80px;
-      background: #4CAF50;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      font-size: 30px;
-      color: white;
-      cursor: pointer;
-      border-radius: 8px;
+        width: 80px;
+        aspect-ratio: 1 / 1;
+        border-radius: 8px;
+        cursor: pointer;
+        position: relative;
+        transform-style: preserve-3d;
+        transition: transform 0.4s;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     }
 
-    .flipped {
-      background: #fff;
-      color: #000;
-      cursor: default;
+    .card.flip { transform: rotateY(180deg); }
+
+    .card-face {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        backface-visibility: hidden;
+        border-radius: 8px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 2em;
     }
 
-    .matched {
-      background: #999;
-      color: white;
-      cursor: default;
+    .card-front {
+        background: #ffffff;
+        transform: rotateY(180deg);
     }
-  </style>
+    .card-back {
+        background: #ffb74d; /* orange back */
+    }
+
+    #timer { font-size: 18px; margin-top: 10px; }
+    #message { font-size: 20px; margin-top: 20px; color: #e65100; }
+</style>
 </head>
 <body>
-
 <h1>Memory Card Game</h1>
-<div id="winMessage"></div>
 
-<div class="game-board" id="board"></div>
+<label for="levelSelect">Select Level:</label>
+<select id="levelSelect">
+    <option value="easy">Easy (4 cards, 60s)</option>
+    <option value="medium">Medium (16 cards, 120s)</option>
+    <option value="hard">Hard (25 cards, 180s)</option>
+</select>
+
+<br>
+<button id="restartBtn">Start / Restart Game</button>
+<br>
+<button id="pauseBtn">Pause</button>
+
+<div id="timer">Time: 0</div>
+<div id="game-board" class="game-board"></div>
+<div id="message"></div>
 
 <script>
-  const emojis = ["🍎", "🍌", "🍇", "🍓", "🍒", "🍉"];
-  let cards = [...emojis, ...emojis];
-  cards.sort(() => 0.5 - Math.random());
+const allIcons = ["🍎","🍌","🍇","🍒","🍓","🍍","🥝","🍉","🥑","🥥","🥕","🍋","🍊","🍐","🥭"];
+const board = document.getElementById("game-board");
+const restartBtn = document.getElementById("restartBtn");
+const pauseBtn = document.getElementById("pauseBtn");
+const levelSelect = document.getElementById("levelSelect");
+const timerDiv = document.getElementById("timer");
+const messageDiv = document.getElementById("message");
 
-  const board = document.getElementById("board");
-  const winMessage = document.getElementById("winMessage");
+let firstCard = null;
+let secondCard = null;
+let lockBoard = false;
+let matchedPairs = 0;
+let totalPairs = 0;
+let timeLeft = 0;
+let timerInterval = null;
+let paused = false;
 
-  let firstCard = null;
-  let secondCard = null;
-  let lockBoard = false;
-  let matchedCount = 0;
+const levelSettings = {
+    easy: { pairs: 2, time: 60 },    // 4 cards
+    medium: { pairs: 8, time: 120 }, // 16 cards
+    hard: { pairs: 12, time: 180 }   // 25 cards + 1 extra
+};
 
+function shuffle(array) { return array.sort(() => Math.random() - 0.5); }
 
-  cards.forEach((emoji) => {
-    const card = document.createElement("div");
-    card.classList.add("card");
-    card.dataset.emoji = emoji;
-    card.innerHTML = "";
-
-    card.addEventListener("click", () => flip(card));
-    board.appendChild(card);
-  });
-
-  function flip(card) {
-    if (lockBoard || card === firstCard || card.classList.contains("matched")) return;
-
-    card.classList.add("flipped");
-    card.innerHTML = card.dataset.emoji;
-
-    if (!firstCard) {
-      firstCard = card;
-    } else {
-      secondCard = card;
-      checkMatch();
-    }
-  }
-
-  function checkMatch() {
-    lockBoard = true;
-
-    if (firstCard.dataset.emoji === secondCard.dataset.emoji) {
-      firstCard.classList.add("matched");
-      secondCard.classList.add("matched");
-      matchedCount += 2;
-
-      checkWin();
-      resetTurn();
-    } else {
-      setTimeout(() => {
-        firstCard.classList.remove("flipped");
-        secondCard.classList.remove("flipped");
-        firstCard.innerHTML = "";
-        secondCard.innerHTML = "";
-        resetTurn();
-      }, 800);
-    }
-  }
-
-  function checkWin() {
-    if (matchedCount === cards.length) {
-      winMessage.innerHTML = "🎉 Congratulations! You matched all cards!";
-    }
-  }
-
-  function resetTurn() {
-    [firstCard, secondCard] = [null, null];
+function createBoard() {
+    clearInterval(timerInterval);
+    board.innerHTML = "";
+    messageDiv.textContent = "";
+    firstCard = null;
+    secondCard = null;
     lockBoard = false;
-  }
-</script>
+    matchedPairs = 0;
+    paused = false;
+    pauseBtn.textContent = "Pause";
 
+    const level = levelSelect.value;
+    const { pairs, time } = levelSettings[level];
+    totalPairs = pairs;
+    timeLeft = time;
+    timerDiv.textContent = `Time: ${timeLeft}s`;
+
+    const icons = shuffle(allIcons).slice(0, totalPairs);
+    let cardsArray = shuffle([...icons, ...icons]);
+
+    if (level === "hard") cardsArray.push(icons[0]);
+
+    const totalCards = cardsArray.length;
+    const columns = Math.ceil(Math.sqrt(totalCards));
+    board.style.gridTemplateColumns = `repeat(${columns}, auto)`;
+
+    cardsArray.forEach(icon => {
+        const card = document.createElement("div");
+        card.classList.add("card");
+        card.innerHTML = `
+            <div class="card-face card-front">${icon}</div>
+            <div class="card-face card-back"></div>
+        `;
+        card.dataset.icon = icon;
+        card.addEventListener("click", flipCard);
+        board.appendChild(card);
+    });
+
+    timerInterval = setInterval(updateTimer, 1000);
+}
+
+function flipCard() {
+    if (lockBoard || this === firstCard || paused) return;
+    this.classList.add("flip");
+
+    if (!firstCard) firstCard = this;
+    else {
+        secondCard = this;
+        lockBoard = true;
+        checkMatch();
+    }
+}
+
+function checkMatch() {
+    if (firstCard.dataset.icon === secondCard.dataset.icon) {
+        disableCards();
+        matchedPairs++;
+        if (matchedPairs === totalPairs) winGame();
+    } else {
+        setTimeout(() => {
+            firstCard.classList.remove("flip");
+            secondCard.classList.remove("flip");
+            resetBoard();
+        }, 900);
+    }
+}
+
+function disableCards() {
+    firstCard.removeEventListener("click", flipCard);
+    secondCard.removeEventListener("click", flipCard);
+    resetBoard();
+}
+
+function resetBoard() { [firstCard, secondCard, lockBoard] = [null, null, false]; }
+
+function updateTimer() {
+    if (!paused) {
+        timeLeft--;
+        timerDiv.textContent = `Time: ${timeLeft}s`;
+        if (timeLeft <= 0) {
+            clearInterval(timerInterval);
+            messageDiv.textContent = "Time's up! Try again!";
+            document.querySelectorAll(".card").forEach(card => card.removeEventListener("click", flipCard));
+        }
+    }
+}
+
+function winGame() {
+    clearInterval(timerInterval);
+    messageDiv.textContent = "🎉 Congratulations! You won! 🎉";
+}
+
+restartBtn.addEventListener("click", createBoard);
+pauseBtn.addEventListener("click", () => {
+    paused = !paused;
+    pauseBtn.textContent = paused ? "Resume" : "Pause";
+});
+
+createBoard();
+</script>
 </body>
 </html>
